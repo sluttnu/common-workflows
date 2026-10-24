@@ -1,30 +1,5 @@
-name: build
-
 on:
   workflow_call:
-    inputs:
-      app:
-        required: true
-        type: string
-      image:
-        required: true
-        type: string
-      context:
-        required: false
-        type: string
-        default: .
-      dockerfile:
-        required: false
-        type: string
-        default: Dockerfile
-      dispatch_repo:
-        required: false
-        type: string
-        default: sluttnu/sluttvps-docker
-      dispatch_event_type:
-        required: false
-        type: string
-        default: deploy
     secrets:
       DEPLOY_DISPATCH_TOKEN:
         required: false
@@ -58,10 +33,15 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Trigger deploy
-        if: ${{ secrets.DEPLOY_DISPATCH_TOKEN != '' }}
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_DISPATCH_TOKEN }}
+        shell: bash
         run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "DEPLOY_DISPATCH_TOKEN not configured; skipping deploy dispatch."
+            exit 0
+          fi
+
           gh api repos/${{ inputs.dispatch_repo }}/dispatches \
             -f event_type=${{ inputs.dispatch_event_type }} \
             -f "client_payload[app]=${{ inputs.app }}"
