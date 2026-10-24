@@ -1,0 +1,67 @@
+name: build
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        required: true
+        type: string
+      image:
+        required: true
+        type: string
+      context:
+        required: false
+        type: string
+        default: .
+      dockerfile:
+        required: false
+        type: string
+        default: Dockerfile
+      dispatch_repo:
+        required: false
+        type: string
+        default: sluttnu/sluttvps-docker
+      dispatch_event_type:
+        required: false
+        type: string
+        default: deploy
+    secrets:
+      DEPLOY_DISPATCH_TOKEN:
+        required: false
+
+jobs:
+  build:
+    runs-on: sluttvps-build
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: true
+          tags: |
+            ${{ inputs.image }}:${{ github.sha }}
+            ${{ inputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Trigger deploy
+        if: ${{ secrets.DEPLOY_DISPATCH_TOKEN != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_DISPATCH_TOKEN }}
+        run: |
+          gh api repos/${{ inputs.dispatch_repo }}/dispatches \
+            -f event_type=${{ inputs.dispatch_event_type }} \
+            -f "client_payload[app]=${{ inputs.app }}"
